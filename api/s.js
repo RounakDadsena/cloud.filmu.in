@@ -1,12 +1,14 @@
-// Link shortener - no DB needed
-// Encodes: title|provider|year|type|posterUrl|redirectto
-// into base64url, packed as /s?d=BASE64
-// App sends to /s?d=... , we decode and render share page
-
 function b64decode(str) {
-  // base64url to base64
   const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
   return Buffer.from(b64, 'base64').toString('utf8');
+}
+
+function isMobile(ua) {
+  return /android|iphone|ipod|mobile|phone/i.test(ua);
+}
+
+function isTablet(ua) {
+  return /ipad|tablet/i.test(ua);
 }
 
 export default function handler(req, res) {
@@ -21,9 +23,21 @@ export default function handler(req, res) {
     return res.status(400).send('Invalid data');
   }
 
-  const [title='', provider='', year='', type='', poster='', redirectto=''] = parts;
+  // Format: title|provider|year|type|poster|redirectto|tvWebUrl
+  const [title='', provider='', year='', type='', poster='', redirectto='', tvWebUrl=''] = parts;
 
-  // Build proxy poster URL
+  const ua = req.headers['user-agent'] || '';
+  const mobile = isMobile(ua);
+  const tablet = isTablet(ua);
+  const desktop = !mobile && !tablet;
+
+  // Desktop or tablet — redirect straight to tv.filmu.in if we have a URL
+  if ((desktop || tablet) && tvWebUrl) {
+    res.setHeader('Cache-Control', 'no-cache');
+    return res.redirect(302, tvWebUrl);
+  }
+
+  // Mobile — show the app redirect page
   const proxyPoster = poster
     ? `https://cloud.filmu.in/api/img?url=${encodeURIComponent(poster)}`
     : '';
@@ -60,13 +74,11 @@ export default function handler(req, res) {
   <meta property="og:image:width"       content="500">
   <meta property="og:image:height"      content="750">
   <meta property="og:image:alt"         content="${sTitle}">` : ''}
-
   <meta name="twitter:card"             content="${sPoster ? 'summary_large_image' : 'summary'}">
   <meta name="twitter:title"            content="${sTitle}">
   <meta name="twitter:description"      content="${ogDesc}">
-  ${sPoster ? `<meta name="twitter:image" content="${sPoster}">
+  ${sPoster ? `<meta name="twitter:image"       content="${sPoster}">
   <meta name="twitter:image:alt"        content="${sTitle}">` : ''}
-
   <meta name="description"              content="${ogDesc}">
 
   <style>
@@ -95,6 +107,8 @@ export default function handler(req, res) {
     .status{font-size:13px;color:#444;text-align:center}
     .btn-open{display:block;width:100%;padding:13px;background:#e01e1e;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;text-align:center;transition:background .2s}
     .btn-open:hover{background:#c01818}
+    .btn-web{display:block;width:100%;padding:11px;background:#111;color:#666;border:1px solid #1e1e1e;border-radius:12px;font-size:12px;font-weight:500;text-decoration:none;text-align:center;transition:all .2s}
+    .btn-web:hover{color:#888;border-color:#333}
     .btn-dl{display:none;width:100%;padding:11px;background:#111;color:#555;border:1px solid #1e1e1e;border-radius:12px;font-size:12px;font-weight:500;text-decoration:none;text-align:center}
     .divider{font-size:10px;color:#1e1e1e;display:none}
   </style>
@@ -126,6 +140,7 @@ export default function handler(req, res) {
     </div>
     <div class="status" id="status">Opening in FilmUmovies...</div>
     <a class="btn-open" id="btn-open" href="#">Open FilmUmovies</a>
+    ${tvWebUrl ? `<a class="btn-web" href="${e(tvWebUrl)}">Watch on FilmU Web instead</a>` : ''}
     <div class="divider" id="divider">App not installed?</div>
     <a class="btn-dl" id="btn-dl" href="https://download.filmu.in/movies">Download FilmUmovies</a>
   </div>
@@ -140,7 +155,7 @@ export default function handler(req, res) {
       statusEl.innerText="Couldn't open FilmUmovies.";
       document.getElementById('btn-dl').style.display='block';
       document.getElementById('divider').style.display='block';
-      setTimeout(function(){window.location.href='https://download.filmu.in/movies';},1500);
+      ${tvWebUrl ? `setTimeout(function(){window.location.href='${tvWebUrl.replace(/'/g,"\\'")}';},1500);` : `setTimeout(function(){window.location.href='https://download.filmu.in/movies';},1500);`}
     }
     function tick(){count--;setRing(count);if(count<=0){clearInterval(timer);onExpired();}}
     function tryOpen(){
