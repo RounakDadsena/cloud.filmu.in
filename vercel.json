@@ -1,5 +1,7 @@
 {
   "rewrites": [
-    { "source": "/share", "destination": "/api/share" }
+    { "source": "/share",   "destination": "/api/share" },
+    { "source": "/s",       "destination": "/api/s"     },
+    { "source": "/api/img", "destination": "/api/img"   }
   ]
 }
